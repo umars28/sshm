@@ -142,6 +142,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setOK("ssh dibuka di tab/terminal baru")
 		}
 		return m, nil
+	case statusMsg:
+		if msg.err != nil {
+			m.setErr(msg.err.Error())
+		} else {
+			m.setOK(msg.message)
+		}
+		return m, nil
 	case tea.KeyMsg:
 		switch m.mode {
 		case modeForm:
@@ -176,7 +183,7 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		if p, ok := m.current(); ok {
-			return m, m.connect(p)
+			return m, m.connectCmd(p)
 		}
 	case "/", "s":
 		m.mode = modeSearch
@@ -278,13 +285,18 @@ func (m Model) updateConnectOptions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if p, ok := m.current(); ok {
 			m.mode = modeList
-			return m, m.connect(p)
+			return m, m.connectCmd(p)
 		}
 	}
 	return m, nil
 }
 
-func (m Model) connect(p profile.Profile) tea.Cmd {
+type statusMsg struct {
+	err     error
+	message string
+}
+
+func (m Model) connectCmd(p profile.Profile) tea.Cmd {
 	c, err := m.buildSSHCommand(p)
 	if err != nil {
 		return func() tea.Msg { return connectMsg{err} }
@@ -293,6 +305,25 @@ func (m Model) connect(p profile.Profile) tea.Cmd {
 		err := openInTerminal(c)
 		return connectMsg{err}
 	}
+}
+
+func (m Model) loadKey(p profile.Profile) tea.Cmd {
+	return func() tea.Msg {
+		if p.Key == "" {
+			return statusMsg{err: fmt.Errorf("profile %s tidak memiliki IdentityFile", p.Name)}
+		}
+		if err := agent.AddKey(p.Key, 0); err != nil {
+			return statusMsg{err: err}
+		}
+		return statusMsg{message: "key dimuat ke ssh-agent"}
+	}
+}
+
+func (m Model) persist() error {
+	if err := m.store.Save(); err != nil {
+		return err
+	}
+	return sshconfig.Sync(m.confPath, m.store.Sorted())
 }
 
 func (m Model) buildSSHCommand(p profile.Profile) (*exec.Cmd, error) {
@@ -306,19 +337,18 @@ func (m Model) buildSSHCommand(p profile.Profile) (*exec.Cmd, error) {
 	if m.connect.useProfileUser && p.User != "" {
 		args = append(args, "-l", p.User)
 	}
+	if p.Port != 0 {
+		args = append(args, "-p", strconv.Itoa(p.Port))
+	}
 	if m.connect.useProfileUser {
 		args = append(args, p.Name)
 	} else {
 		args = append(args, p.HostName)
 	}
-	if !m.connect.useProfileUser && p.Port != 0 {
-		args = append([]string{"-p", strconv.Itoa(p.Port)}, args...)
-	}
 	return terminalCommand("ssh", args...)
 }
 
 func terminalCommand(cmd string, args ...string) (*exec.Cmd, error) {
-	swt := strings.Join(args, " ")
 	switch runtime.GOOS {
 	case "darwin":
 		script := fmt.Sprintf(`tell application "Terminal" to do script "%s"`, escapeForAppleScript(cmd, args...))
