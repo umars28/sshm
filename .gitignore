@@ -1,0 +1,4 @@
+sshm
+homebrew-tap/
+*.log
+*.tmp
