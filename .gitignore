@@ -2,3 +2,5 @@ sshm
 homebrew-tap/
 *.log
 *.tmp
+
+.aiflow/logs/
