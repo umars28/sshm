@@ -95,10 +95,15 @@ func Sync(confPath string, profiles []profile.Profile) error {
 		// first pre-sshm config is always recoverable.
 		orig := confPath + ".sshm.orig"
 		if _, err := os.Stat(orig); os.IsNotExist(err) {
-			_ = os.WriteFile(orig, existing, 0o600)
+			if err := os.WriteFile(orig, existing, 0o600); err != nil {
+				return fmt.Errorf("writing pristine backup %s: %w", orig, err)
+			}
 		}
 		// Rolling backup: the state immediately before this change.
-		_ = os.WriteFile(confPath+".sshm.bak", existing, 0o600)
+		bak := confPath + ".sshm.bak"
+		if err := os.WriteFile(bak, existing, 0o600); err != nil {
+			return fmt.Errorf("writing backup %s: %w", bak, err)
+		}
 	}
 	return os.WriteFile(confPath, []byte(out), 0o600)
 }
