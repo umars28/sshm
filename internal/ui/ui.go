@@ -411,7 +411,7 @@ func (m Model) viewList() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("sshm — koneksi tersimpan") + "\n\n")
 	if m.search.Value() != "" || m.mode == modeSearch {
-		b.WriteString(dimStyle.Render("Search: " + m.search.View()) + "\n\n")
+		b.WriteString(dimStyle.Render("Search: "+m.search.View()) + "\n\n")
 	}
 	if len(m.profiles) == 0 {
 		if m.search.Value() != "" {
